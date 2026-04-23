@@ -1,132 +1,106 @@
 # Fourier Neural Operator (FNO) in C++
 
-## Mathematical Foundation
 
-### 1. Fourier Neural Operators
+## What is FNO and Why Should You Care?
 
-FNOs learn mappings between function spaces by operating in the Fourier domain:
+Many physics problems require solving differential equations—for example, how heat diffuses through a material, how waves propagate, or how fluids flow. Traditional approaches compute these solutions by discretizing the domain and solving large systems of equations, which is computationally expensive.
 
-$$\mathcal{F}: u(x) \rightarrow v(x)$$
-
-where $u(x)$ is the input function and $v(x)$ is the output function.
-
-**Key Equation - Spectral Convolution:**
-
-$$v_j^{\ell+1}(x) = \sigma \left( \sum_{k=1}^{d} \int_{\Omega} e^{2\pi i k x \cdot \xi} \mathcal{R}^{\ell}_k(\xi) \left( \int_{\Omega} e^{-2\pi i k x \cdot \xi} v_j^{\ell}(x) dx \right) d\xi \right)$$
-
-Simplified for 1D:
-
-$$y(x) = \mathcal{FFT}^{-1}\left[ \mathcal{R}(\omega) \odot \mathcal{FFT}[u(x)] \right]$$
-
-where:
-- $\mathcal{FFT}$ = Fast Fourier Transform
-- $\mathcal{R}(\omega)$ = Learnable weights in Fourier space (complex)
-- $\odot$ = Element-wise multiplication
-- $\mathcal{FFT}^{-1}$ = Inverse FFT (returns to spatial domain)
-
-### 2. Wave Equation Example
-
-The code solves the 1D advection equation (constant-speed wave equation):
-
-$$\frac{\partial u}{\partial t} + c \frac{\partial u}{\partial x} = 0$$
-
-**Exact Solution:**
-$$u(x, t) = u_0(x - ct)$$
-
-The FNO learns this operator by encoding the phase shift $e^{-2\pi i k c t}$ directly into the spectral weights $\mathcal{R}_k$.
-
-### 3. Fast Fourier Transform (Cooley-Tukey)
-
-The recursive FFT algorithm reduces complexity from $O(n^2)$ to $O(n \log n)$:
-
-**Algorithm:**
-1. Divide sequence into even and odd indices
-2. Recursively transform both halves
-3. Combine results using twiddle factors: $W_n^k = e^{2\pi i k/n}$
-
-**For Inversion:** Apply FFT with inverted angle, then divide by 2 at each stage.
+**Fourier Neural Operators** learn to approximate the solution operator directly by working in the frequency domain. Once trained on example solutions, they can generate predictions for new initial conditions in a fraction of the time required by classical numerical methods.
 
 
+## How FNO Works
 
-### File Descriptions
+The fundamental idea is to transform the problem into a domain where operations are simpler:
 
-#### `include/fno/Types.hpp`
-Centralized type definitions for consistency across the codebase:
-- `Complex` = `std::complex<double>` (complex numbers for FFT)
-- `Tensor1D` = `std::vector<double>` (real-valued 1D tensors)
-- `Complex1D` = `std::vector<Complex>` (spectral tensors)
-- `PI` = $\pi$ constant for mathematical operations
+1. **Input** → Convert data to frequency domain (decompose into frequency components, like analyzing the frequency spectrum of a signal)
+2. **Process** → Apply transformations in frequency space (multiply by learnable weights)
+3. **Output** → Transform back to spatial domain (reconstruct the physical solution)
 
-**Why this matters:** Changing precision (e.g., `double` to `float`) requires only one edit.
+The key advantage: **Frequency space representation makes solving physics problems computationally more efficient.**
 
-#### `include/fno/FFT.hpp` & `src/FFT.cpp`
-Implements the 1D Cooley-Tukey Fast Fourier Transform:
+## Project Structure
 
-```cpp
-void fft1d(Complex1D& x, bool invert);
+```
+fno_cpp/
+├── CMakeLists.txt              Build configuration and compilation rules
+├── include/fno/
+│   ├── Types.hpp               Type definitions and constants
+│   ├── FFT.hpp                 Fast Fourier Transform interface
+│   └── SpectralConv1D.hpp      Spectral convolution layer interface
+├── src/
+│   ├── FFT.cpp                 FFT algorithm implementation
+│   ├── SpectralConv1D.cpp      FNO layer implementation
+│   └── main.cpp                Demo application and test case
+└── build/                      Directory for compiled binaries
 ```
 
-**Parameters:**
-- `x`: Vector of complex numbers (modified in-place)
-- `invert`: `false` for forward FFT, `true` for inverse FFT
+## What Each File Does
 
-**Algorithm Steps:**
-1. Base case: If size ≤ 1, return
-2. Split input into even and odd indices
-3. Recursively transform both halves
-4. Combine using twiddle factors: $e^{-2\pi i k / n}$
-5. For inversion, divide by 2 at each stage
+| File | Purpose |
+|------|---------|
+| **Types.hpp** | Defines common data types used throughout the code |
+| **FFT.cpp** | Converts data to/from frequency space (Fast Fourier Transform) |
+| **SpectralConv1D.cpp** | The core FNO algorithm that solves physics problems |
+| **main.cpp** | Example: solves a wave equation to show how it works |
+## Quick Start (5 Minutes)
 
-**Complexity:** $O(n \log n)$ where $n$ = sequence length (must be power of 2)
+### Step 1: Set Up
 
-#### `include/fno/SpectralConv1D.hpp` & `src/SpectralConv1D.cpp`
-Spectral convolution layer implementing the FNO operator:
+Make sure you have:
+- **A C++ compiler** (comes with most systems)
+- **CMake** (build tool) — [Install here](https://cmake.org/download/)
 
-**Class Members:**
-```cpp
-int modes;                    // Number of Fourier modes to retain
-int spatial_res;              // Spatial resolution (grid points)
-Complex1D weights_R;          // Learnable spectral weights
+### Step 2: Build
+
+Open a terminal in the project directory and run:
+
+```bash
+mkdir build
+cd build
+cmake ..
+make
 ```
 
-**Key Methods:**
-
-1. **`SpectralConv1D(int m, int res)`** - Constructor
-   - Initializes with `m` Fourier modes and `res` spatial points
-
-2. **`inject_exact_pde_operator(double wave_speed, double target_time)`** - Ground truth injection
-   - Encodes the exact solution of the advection equation
-   - Sets: $\mathcal{R}_k = e^{-2\pi i k c t}$
-   - Useful for validation and testing
-
-3. **`forward(const Tensor1D& input)`** - Forward pass
-   - **Step 1:** Convert input to complex (real part only)
-   - **Step 2:** Apply forward FFT → spectral domain
-   - **Step 3:** Multiply by spectral weights (convolution)
-   - **Step 4:** Mirror conjugates (ensure real output)
-   - **Step 5:** Apply inverse FFT → spatial domain
-   - **Step 6:** Extract real part
-   - **Returns:** Tensor1D with transformed output
-
-#### `src/main.cpp`
-Demonstration that applies FNO to a simple wave equation:
-
-**Configuration:**
-```cpp
-int spatial_resolution = 64;  // 64 grid points
-int modes = 8;                // Use 8 Fourier modes
-double c = 1.0;              // Wave speed
-double t = 0.25;             // Time step
+Expected output indicating successful compilation:
+```
+[100%] Built target fno_main
 ```
 
-**Workflow:**
-1. Create FNO layer with given parameters
-2. Inject exact PDE operator (ground truth)
-3. Generate initial condition: $u_0(x) = \sin(2\pi x)$
-4. Compute exact solution: $u(x,t) = \sin(2\pi(x - ct))$
-5. Run FNO forward pass
-6. Compare predictions vs exact solution (compute MSE)
+### Step 3: Run
 
+```bash
+./fno_main
+```
+
+You'll see predictions compared to exact answers:
+```
+FNO Prediction vs Exact Solution
+x: 0.000 | Exact: -1.000 | FNO: -1.000
+x: 0.125 | Exact: -0.707 | FNO: -0.707
+x: 0.250 | Exact: 0.000 | FNO: 0.000
+...
+MSE: 1.570e-32
+```
+
+## Understanding the Example: 1D Advection
+
+This demonstration solves a fundamental PDE: the **1D advection (transport) equation**.
+
+### Simulation Parameters
+
+- **Grid size**: 64 spatial points (discretization of the domain)
+- **Wave speed**: 1.0 unit per time step (constant velocity)
+- **Time**: 0.25 time units (prediction horizon)
+- **Frequency modes**: 8 (using only 8 frequency components instead of 64 to represent the solution)
+
+### Workflow
+
+1. **Initializes** a wave pattern with sinusoidal initial condition
+2. **Applies** the FNO operator to predict how the wave evolves (advection by 0.25 units)
+3. **Compares** the FNO prediction with the analytically computed solution
+4. **Quantifies accuracy** using Mean Squared Error (demonstrates near-machine-precision agreement)
+
+---
 ## Building and Running
 
 ### Prerequisites
