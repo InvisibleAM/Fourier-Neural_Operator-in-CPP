@@ -1,0 +1,4 @@
+/home/invisibleam/Fourier-Neural_Operator-in-CPP/build/CMakeFiles/fno_core.dir
+/home/invisibleam/Fourier-Neural_Operator-in-CPP/build/CMakeFiles/fno_main.dir
+/home/invisibleam/Fourier-Neural_Operator-in-CPP/build/CMakeFiles/edit_cache.dir
+/home/invisibleam/Fourier-Neural_Operator-in-CPP/build/CMakeFiles/rebuild_cache.dir

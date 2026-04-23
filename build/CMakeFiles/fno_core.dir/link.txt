@@ -1,0 +1,2 @@
+/usr/bin/ar qc libfno_core.a CMakeFiles/fno_core.dir/src/FFT.cpp.o CMakeFiles/fno_core.dir/src/SpectralConv1D.cpp.o
+/usr/bin/ranlib libfno_core.a
